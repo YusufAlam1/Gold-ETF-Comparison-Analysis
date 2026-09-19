@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gold vs. S&amp;P 500 — 5 years</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<style>
+  :root {
+    --spx:      #3B7FD4;   /* S&P 500 — validated against the gold below */
+    --gold:     #B57F0A;   /* gold                                       */
+    --fx:       #6B7280;   /* USD/CAD context line (dashed, recessive)   */
+    --ink:      #1a1a1a;
+    --ink-2:    #4a4a4a;
+    --muted:    #767676;
+    --rule:     #e4e4e2;
+    --surface:  #fcfcfb;
+    --stripe:   #f5f5f3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 32px 48px;
+    background: var(--surface);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  h1 { font-size: 25px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .sub { color: var(--ink-2); margin: 0 0 20px; font-size: 14.5px; }
+
+  /* ---- controls ---- */
+  .controls {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px;
+    padding: 12px 14px; margin-bottom: 14px;
+    border: 1px solid var(--rule); border-radius: 8px; background: #fff;
+  }
+  .group { display: flex; align-items: center; gap: 8px; }
+  .group > .label {
+    font-size: 11.5px; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+  .seg label {
+    padding: 6px 14px; font-size: 14px; cursor: pointer; color: var(--ink-2);
+    background: #fff; border-right: 1px solid var(--rule); user-select: none;
+  }
+  .seg label:last-child { border-right: 0; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg input:checked + span { color: #fff; }
+  .seg label:has(input:checked) { background: var(--ink); color: #fff; }
+  .seg label:has(input:focus-visible) { outline: 2px solid var(--spx); outline-offset: -2px; }
+  .check { display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--ink-2); cursor: pointer; }
+  .check input { width: 15px; height: 15px; accent-color: var(--fx); cursor: pointer; }
+
+  #chart { width: 100%; height: 560px; }
+  .axis-note { color: var(--muted); font-size: 12.5px; margin: 4px 2px 0; min-height: 1.4em; }
+
+  /* ---- metrics ---- */
+  .panel-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; margin: 26px 0 8px;
+  }
+  .panel-head h2 { font-size: 16px; margin: 0; font-weight: 700; }
+  .panel-head .range { font-size: 13.5px; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  caption { text-align: left; caption-side: top; font-size: 0; height: 0; }  /* a11y name only */
+  th, td { padding: 7px 12px; text-align: right; font-size: 14px; }
+  thead th { border-bottom: 1.5px solid var(--rule); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  thead th:first-child { text-align: left; color: var(--muted); }
+  th.spx  { color: var(--spx); }
+  th.gold { color: var(--gold); }
+  tbody th { text-align: left; font-weight: 400; color: var(--ink-2); }
+  tbody tr:nth-child(odd) { background: var(--stripe); }
+  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+  .pos { color: #17693f; }
+  .neg { color: #a3271d; }
+
+  .corr { margin-top: 12px; font-size: 14px; color: var(--ink-2); }
+  .corr b { font-weight: 600; color: var(--ink); }
+  footer { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 12.5px; }
+  footer p { margin: 0 0 5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Gold vs. S&amp;P 500 — 5 years</h1>
+  <p class="sub" id="subtitle"></p>
+
+  <div class="controls">
+    <div class="group">
+      <span class="label">Currency</span>
+      <span class="seg">
+        <label><input type="radio" name="cur" value="cad" checked><span>CAD</span></label>
+        <label><input type="radio" name="cur" value="usd"><span>USD</span></label>
+      </span>
+    </div>
+    <div class="group">
+      <span class="label">View</span>
+      <span class="seg">
+        <label><input type="radio" name="view" value="price" checked><span>Price</span></label>
+        <label><input type="radio" name="view" value="indexed"><span>Indexed to 100</span></label>
+      </span>
+    </div>
+    <label class="check">
+      <input type="checkbox" id="fx"> Overlay USD/CAD
+    </label>
+  </div>
+
+  <div id="chart"></div>
+  <p class="axis-note" id="axisNote"></p>
+
+  <div class="panel-head">
+    <h2>Statistics over the selected range</h2>
+    <span class="range" id="rangeLabel"></span>
+  </div>
+
+  <table>
+    <caption>Performance statistics for the selected date range</caption>
+    <thead>
+      <tr>
+        <th scope="col">Metric</th>
+        <th scope="col" class="spx"><span class="swatch" style="background:var(--spx)"></span><span id="hSpx">S&amp;P 500</span></th>
+        <th scope="col" class="gold"><span class="swatch" style="background:var(--gold)"></span><span id="hGold">Gold</span></th>
+      </tr>
+    </thead>
+    <tbody id="metrics"></tbody>
+  </table>
+  <p class="corr" id="corr"></p>
+
+  <footer>
+    <p>Price return only — excludes S&amp;P 500 dividends and gold holding/storage costs.</p>
+    <p>The series are monthly averages, so intramonth extremes are smoothed: peaks, troughs, best/worst month
+       and especially max drawdown are all understated relative to daily data. The final point is spot as of 21 Aug 2026.</p>
+    <p>Sources: Shiller S&amp;P 500 monthly series, LBMA gold fix, U.S. Federal Reserve H.10 USD/CAD.</p>
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+
+// ---------------------------------------------------------------- data
+const DATA = [
+  {date:'2021-08-01', spx_usd:4454.21, gold_usd:1785.0, spx_cad:5611.85, gold_cad:2248.92, usdcad:1.2599},
+  {date:'2021-09-01', spx_usd:4445.54, gold_usd:1775.0, spx_cad:5632.95, gold_cad:2249.1, usdcad:1.2671},
+  {date:'2021-10-01', spx_usd:4460.71, gold_usd:1777.0, spx_cad:5546.44, gold_cad:2209.52, usdcad:1.2434},
+  {date:'2021-11-01', spx_usd:4667.39, gold_usd:1822.0, spx_cad:5865.5, gold_cad:2289.71, usdcad:1.2567},
+  {date:'2021-12-01', spx_usd:4674.77, gold_usd:1790.0, spx_cad:5983.71, gold_cad:2291.2, usdcad:1.28},
+  {date:'2022-01-01', spx_usd:4573.82, gold_usd:1816.0, spx_cad:5773.07, gold_cad:2292.16, usdcad:1.2622},
+  {date:'2022-02-01', spx_usd:4435.98, gold_usd:1856.0, spx_cad:5638.57, gold_cad:2359.16, usdcad:1.2711},
+  {date:'2022-03-01', spx_usd:4391.27, gold_usd:1948.0, spx_cad:5559.34, gold_cad:2466.17, usdcad:1.266},
+  {date:'2022-04-01', spx_usd:4391.3, gold_usd:1937.0, spx_cad:5545.33, gold_cad:2446.04, usdcad:1.2628},
+  {date:'2022-05-01', spx_usd:4040.36, gold_usd:1849.0, spx_cad:5195.5, gold_cad:2377.63, usdcad:1.2859},
+  {date:'2022-06-01', spx_usd:3898.95, gold_usd:1837.0, spx_cad:4992.21, gold_cad:2352.09, usdcad:1.2804},
+  {date:'2022-07-01', spx_usd:3911.73, gold_usd:1733.0, spx_cad:5060.21, gold_cad:2241.81, usdcad:1.2936},
+  {date:'2022-08-01', spx_usd:4158.56, gold_usd:1765.0, spx_cad:5371.62, gold_cad:2279.85, usdcad:1.2917},
+  {date:'2022-09-01', spx_usd:3850.52, gold_usd:1680.78, spx_cad:5136.21, gold_cad:2241.99, usdcad:1.3339},
+  {date:'2022-10-01', spx_usd:3726.05, gold_usd:1664.0, spx_cad:5100.59, gold_cad:2277.85, usdcad:1.3689},
+  {date:'2022-11-01', spx_usd:3917.49, gold_usd:1725.0, spx_cad:5271.76, gold_cad:2321.33, usdcad:1.3457},
+  {date:'2022-12-01', spx_usd:3912.38, gold_usd:1798.0, spx_cad:5314.97, gold_cad:2442.58, usdcad:1.3585},
+  {date:'2023-01-01', spx_usd:3960.66, gold_usd:1898.0, spx_cad:5315.99, gold_cad:2547.5, usdcad:1.3422},
+  {date:'2023-02-01', spx_usd:4079.68, gold_usd:1855.0, spx_cad:5488.81, gold_cad:2495.72, usdcad:1.3454},
+  {date:'2023-03-01', spx_usd:3968.56, gold_usd:1913.0, spx_cad:5430.18, gold_cad:2617.56, usdcad:1.3683},
+  {date:'2023-04-01', spx_usd:4121.47, gold_usd:2000.0, spx_cad:5557.39, gold_cad:2696.8, usdcad:1.3484},
+  {date:'2023-05-01', spx_usd:4146.17, gold_usd:1992.0, spx_cad:5604.38, gold_cad:2692.59, usdcad:1.3517},
+  {date:'2023-06-01', spx_usd:4345.37, gold_usd:1943.0, spx_cad:5773.26, gold_cad:2581.47, usdcad:1.3286},
+  {date:'2023-07-01', spx_usd:4508.08, gold_usd:1951.0, spx_cad:5955.62, gold_cad:2577.47, usdcad:1.3211},
+  {date:'2023-08-01', spx_usd:4457.36, gold_usd:1919.0, spx_cad:6007.63, gold_cad:2586.43, usdcad:1.3478},
+  {date:'2023-09-01', spx_usd:4515.77, gold_usd:1916.0, spx_cad:6110.29, gold_cad:2592.54, usdcad:1.3531},
+  {date:'2023-10-01', spx_usd:4269.4, gold_usd:1916.0, spx_cad:5854.2, gold_cad:2627.22, usdcad:1.3712},
+  {date:'2023-11-01', spx_usd:4460.06, gold_usd:1984.0, spx_cad:6113.4, gold_cad:2719.47, usdcad:1.3707},
+  {date:'2023-12-01', spx_usd:4685.05, gold_usd:2026.0, spx_cad:6285.46, gold_cad:2718.08, usdcad:1.3416},
+  {date:'2024-01-01', spx_usd:4804.49, gold_usd:2034.0, spx_cad:6449.07, gold_cad:2730.24, usdcad:1.3423},
+  {date:'2024-02-01', spx_usd:5011.96, gold_usd:2023.0, spx_cad:6766.15, gold_cad:2731.05, usdcad:1.35},
+  {date:'2024-03-01', spx_usd:5170.57, gold_usd:2158.0, spx_cad:6998.88, gold_cad:2921.07, usdcad:1.3536},
+  {date:'2024-04-01', spx_usd:5112.49, gold_usd:2331.0, spx_cad:6990.82, gold_cad:3187.41, usdcad:1.3674},
+  {date:'2024-05-01', spx_usd:5235.23, gold_usd:2351.0, spx_cad:7154.99, gold_cad:3213.11, usdcad:1.3667},
+  {date:'2024-06-01', spx_usd:5415.14, gold_usd:2326.0, spx_cad:7421.45, gold_cad:3187.78, usdcad:1.3705},
+  {date:'2024-07-01', spx_usd:5538.0, gold_usd:2398.0, spx_cad:7594.81, gold_cad:3288.62, usdcad:1.3714},
+  {date:'2024-08-01', spx_usd:5478.21, gold_usd:2470.0, spx_cad:7480.5, gold_cad:3372.78, usdcad:1.3655},
+  {date:'2024-09-01', spx_usd:5621.26, gold_usd:2571.0, spx_cad:7614.56, gold_cad:3482.68, usdcad:1.3546},
+  {date:'2024-10-01', spx_usd:5792.32, gold_usd:2690.0, spx_cad:7968.49, gold_cad:3700.63, usdcad:1.3757},
+  {date:'2024-11-01', spx_usd:5929.92, gold_usd:2651.0, spx_cad:8285.88, gold_cad:3704.24, usdcad:1.3973},
+  {date:'2024-12-01', spx_usd:6010.91, gold_usd:2648.0, spx_cad:8563.74, gold_cad:3772.61, usdcad:1.4247},
+  {date:'2025-01-01', spx_usd:5979.52, gold_usd:2710.0, spx_cad:8603.93, gold_cad:3899.42, usdcad:1.4389},
+  {date:'2025-02-01', spx_usd:6038.69, gold_usd:2895.0, spx_cad:8634.72, gold_cad:4139.56, usdcad:1.4299},
+  {date:'2025-03-01', spx_usd:5683.98, gold_usd:2983.0, spx_cad:8159.92, gold_cad:4282.39, usdcad:1.4356},
+  {date:'2025-04-01', spx_usd:5369.5, gold_usd:3218.0, spx_cad:7507.1, gold_cad:4499.09, usdcad:1.3981},
+  {date:'2025-05-01', spx_usd:5810.92, gold_usd:3309.0, spx_cad:8058.0, gold_cad:4588.59, usdcad:1.3867},
+  {date:'2025-06-01', spx_usd:6029.95, gold_usd:3353.0, spx_cad:8241.74, gold_cad:4582.88, usdcad:1.3668},
+  {date:'2025-07-01', spx_usd:6296.5, gold_usd:3340.0, spx_cad:8620.54, gold_cad:4572.79, usdcad:1.3691},
+  {date:'2025-08-01', spx_usd:6408.95, gold_usd:3368.0, spx_cad:8842.43, gold_cad:4646.83, usdcad:1.3797},
+  {date:'2025-09-01', spx_usd:6584.02, gold_usd:3667.68, spx_cad:9108.33, gold_cad:5073.87, usdcad:1.3834},
+  {date:'2025-10-01', spx_usd:6735.69, gold_usd:4058.33, spx_cad:9421.88, gold_cad:5676.79, usdcad:1.3988},
+  {date:'2025-11-01', spx_usd:6740.89, gold_usd:4087.0, spx_cad:9474.99, gold_cad:5744.69, usdcad:1.4056},
+  {date:'2025-12-01', spx_usd:6853.03, gold_usd:4309.0, spx_cad:9453.75, gold_cad:5944.27, usdcad:1.3795},
+  {date:'2026-01-01', spx_usd:6929.12, gold_usd:4753.0, spx_cad:9542.09, gold_cad:6545.36, usdcad:1.3771},
+  {date:'2026-02-01', spx_usd:6893.81, gold_usd:5020.0, spx_cad:9408.67, gold_cad:6851.3, usdcad:1.3648},
+  {date:'2026-03-01', spx_usd:6654.42, gold_usd:4856.0, spx_cad:9129.86, gold_cad:6662.43, usdcad:1.372},
+  {date:'2026-04-01', spx_usd:6957.01, gold_usd:4721.0, spx_cad:9568.67, gold_cad:6493.26, usdcad:1.3754},
+  {date:'2026-05-01', spx_usd:7412.55, gold_usd:4587.0, spx_cad:10167.79, gold_cad:6291.99, usdcad:1.3717},
+  {date:'2026-06-01', spx_usd:7450.03, gold_usd:4228.0, spx_cad:10455.37, gold_cad:5933.58, usdcad:1.4034},
+  {date:'2026-07-01', spx_usd:7481.34, gold_usd:4073.0, spx_cad:10552.43, gold_cad:5744.97, usdcad:1.4105},
+  {date:'2026-08-01', spx_usd:7674.37, gold_usd:4600.0, spx_cad:10645.89, gold_cad:6381.12, usdcad:1.3872},
+];
+
+const COLOR = { spx: '#3B7FD4', gold: '#B57F0A', fx: '#6B7280', grid: '#ececea', ink: '#1a1a1a', muted: '#767676' };
+
+const state = {
+  currency: 'cad',    // 'cad' | 'usd'
+  view:     'price',  // 'price' | 'indexed'
+  showFx:   false,
+  range:    null      // [msStart, msEnd] from the range slider, or null for "all"
+};
+
+// ---------------------------------------------------------------- helpers
+
+// Parse both our 'YYYY-MM-DD' dates and Plotly's 'YYYY-MM-DD HH:MM:SS.sss'
+// range strings in LOCAL time, so the two are always comparable.
+function toMs(v) {
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return Date.parse(s);
+  const t = s.slice(10).trim().split(':');
+  return new Date(+m[1], +m[2] - 1, +m[3],
+                  +(t[0] || 0), +(t[1] || 0), parseFloat(t[2] || 0)).getTime();
+}
+
+const HOUR = 3600e3;
+
+function visibleRows() {
+  if (!state.range) return DATA;
+  const [a, b] = state.range;
+  const rows = DATA.filter(r => { const t = toMs(r.date); return t >= a - HOUR && t <= b + HOUR; });
+  return rows.length >= 2 ? rows : DATA;   // never let the panel go empty on a sliver selection
+}
+
+const CUR = () => (state.currency === 'cad'
+  ? { key: 'cad', prefix: 'C$', label: 'CAD' }
+  : { key: 'usd', prefix: 'US$', label: 'USD' });
+
+const valuesOf = (rows, name) => rows.map(r => r[name + '_' + CUR().key]);
+
+function fmtMoney(v) {
+  if (!isFinite(v)) return '—';
+  return CUR().prefix + Math.round(v).toLocaleString('en-US');
+}
+function fmtPct(v) {                         // v as a fraction, e.g. 0.897
+  if (!isFinite(v)) return '—';
+  const p = v * 100;
+  return (p >= 0 ? '+' : '\u2212') + Math.abs(p).toFixed(1) + '%';
+}
+function fmtPlain(v, dp) { return isFinite(v) ? v.toFixed(dp) : '—'; }
+const monthLabel = d => new Date(toMs(d)).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+// ---------------------------------------------------------------- statistics
+
+const monthlyReturns = v => v.slice(1).map((x, i) => x / v[i] - 1);
+
+function mean(a) { return a.reduce((s, x) => s + x, 0) / a.length; }
+
+function stdev(a) {                          // sample stdev (n-1)
+  if (a.length < 2) return NaN;
+  const m = mean(a);
+  return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / (a.length - 1));
+}
+
+function correlation(a, b) {
+  if (a.length < 2 || a.length !== b.length) return NaN;
+  const ma = mean(a), mb = mean(b);
+  let num = 0, da = 0, db = 0;
+  for (let i = 0; i < a.length; i++) {
+    num += (a[i] - ma) * (b[i] - mb);
+    da  += (a[i] - ma) ** 2;
+    db  += (b[i] - mb) ** 2;
+  }
+  return num / Math.sqrt(da * db);
+}
+
+function maxDrawdown(v) {
+  let peak = -Infinity, worst = 0;
+  for (const x of v) { peak = Math.max(peak, x); worst = Math.min(worst, x / peak - 1); }
+  return worst;
+}
+
+function computeStats(v) {
+  const start = v[0], end = v[v.length - 1];
+  const r = monthlyReturns(v);
+  const years = r.length / 12;               // one monthly step per return
+  return {
+    start, end,
+    totalReturn: end / start - 1,
+    cagr:  years > 0 ? (end / start) ** (1 / years) - 1 : NaN,
+    vol:   stdev(r) * Math.sqrt(12),
+    maxDD: maxDrawdown(v),
+    best:  r.length ? Math.max(...r) : NaN,
+    worst: r.length ? Math.min(...r) : NaN,
+    growth10k: 10000 * (end / start),
+    returns: r
+  };
+}
+
+// ---------------------------------------------------------------- chart
+
+const SPX_NAME  = 'S&P 500';
+const GOLD_NAME = 'Gold';
+
+function line(name, color, x, y, axis, template) {
+  return {
+    type: 'scatter', mode: 'lines', name, x, y, yaxis: axis,
+    line: { color, width: 2.5 },
+    hovertemplate: template + '<extra>' + name + '</extra>'
+  };
+}
+
+function buildTraces() {
+  const rows = visibleRows();                 // indexing rebases to the first VISIBLE month
+  const x    = DATA.map(r => r.date);         // but always draw the full series
+  const spx  = valuesOf(DATA, 'spx');
+  const gold = valuesOf(DATA, 'gold');
+  const traces = [];
+
+  if (state.view === 'price') {
+    const money = CUR().prefix + '%{y:,.0f}';
+    traces.push(line(SPX_NAME,  COLOR.spx,  x, spx,  'y',  money));
+    traces.push(line(GOLD_NAME, COLOR.gold, x, gold, 'y2', money));
+  } else {
+    const baseSpx  = rows[0][ 'spx_'  + CUR().key];
+    const baseGold = rows[0][ 'gold_' + CUR().key];
+    const idx = '%{y:,.1f}';
+    traces.push(line(SPX_NAME,  COLOR.spx,  x, spx.map(v  => 100 * v / baseSpx),  'y', idx));
+    traces.push(line(GOLD_NAME, COLOR.gold, x, gold.map(v => 100 * v / baseGold), 'y', idx));
+  }
+
+  if (state.showFx) {
+    traces.push({
+      type: 'scatter', mode: 'lines', name: 'USD/CAD', yaxis: 'y3',
+      x, y: DATA.map(r => r.usdcad),
+      line: { color: COLOR.fx, width: 1.5, dash: 'dot' },
+      opacity: 0.7,                        // context line: never louder than the two priced series
+      hovertemplate: '%{y:.4f}<extra>USD/CAD</extra>'
+    });
+  }
+  return traces;
+}
+
+// Final-value labels for each series, plus gold's peak within the visible range.
+function buildAnnotations() {
+  const rows  = visibleRows();
+  const last  = rows[rows.length - 1];
+  const notes = [];
+
+  const label = (x, y, text, color, ref) => ({
+    x, y, text, xref: 'x', yref: ref, showarrow: false,
+    xanchor: 'right', yanchor: 'bottom', xshift: -4, yshift: 8,
+    font: { color, size: 14, weight: 700 },
+    bgcolor: 'rgba(252,252,251,0.82)', borderpad: 2   // keeps the label off the line it labels
+  });
+
+  if (state.view === 'price') {
+    const gold = valuesOf(rows, 'gold');
+    const peak = rows[gold.indexOf(Math.max(...gold))];
+    notes.push(label(last.date, last['spx_'  + CUR().key], fmtMoney(last['spx_'  + CUR().key]), COLOR.spx,  'y'));
+    notes.push(label(last.date, last['gold_' + CUR().key], fmtMoney(last['gold_' + CUR().key]), COLOR.gold, 'y2'));
+    notes.push({
+      x: peak.date, y: peak['gold_' + CUR().key], yref: 'y2', xref: 'x',
+      text: 'peak ' + fmtMoney(peak['gold_' + CUR().key]),
+      showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: COLOR.gold,
+      ax: -40, ay: -20, xanchor: 'right', font: { color: COLOR.gold, size: 12.5 },
+      bgcolor: 'rgba(252,252,251,0.82)', borderpad: 2
+    });
+  } else {
+    const bSpx = rows[0]['spx_' + CUR().key], bGold = rows[0]['gold_' + CUR().key];
+    const gIdx = valuesOf(rows, 'gold').map(v => 100 * v / bGold);
+    const peakAt = gIdx.indexOf(Math.max(...gIdx));
+    const lastSpx  = 100 * last['spx_'  + CUR().key] / bSpx;
+    const lastGold = 100 * last['gold_' + CUR().key] / bGold;
+    notes.push(label(last.date, lastSpx,  fmtPlain(lastSpx, 1),  COLOR.spx,  'y'));
+    notes.push(label(last.date, lastGold, fmtPlain(lastGold, 1), COLOR.gold, 'y'));
+    notes.push({
+      x: rows[peakAt].date, y: gIdx[peakAt], yref: 'y', xref: 'x',
+      text: 'peak ' + fmtPlain(gIdx[peakAt], 1),
+      showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: COLOR.gold,
+      ax: -40, ay: -20, xanchor: 'right', font: { color: COLOR.gold, size: 12.5 },
+      bgcolor: 'rgba(252,252,251,0.82)', borderpad: 2
+    });
+  }
+  return notes;
+}
+
+function buildLayout() {
+  const cur      = CUR();
+  const priceView = state.view === 'price';
+  const domainEnd = state.showFx ? 0.9 : 1;
+
+  const xaxis = {
+    type: 'date',
+    domain: [0, domainEnd],
+    showgrid: false,
+    linecolor: COLOR.grid,
+    tickfont: { color: COLOR.muted, size: 12 },
+    hoverformat: '%b %Y',
+    rangeslider: { visible: true, thickness: 0.09, bgcolor: '#f5f5f3', bordercolor: COLOR.grid, borderwidth: 1 },
+    rangeselector: {
+      x: 0, y: 1.16, xanchor: 'left', yanchor: 'top',
+      bgcolor: '#fff', activecolor: '#e8eef8', bordercolor: COLOR.grid, borderwidth: 1,
+      font: { size: 12.5 },
+      buttons: [
+        { count: 1, label: '1Y', step: 'year', stepmode: 'backward' },
+        { count: 3, label: '3Y', step: 'year', stepmode: 'backward' },
+        { step: 'all', label: '5Y' }
+      ]
+    }
+  };
+  if (state.range) { xaxis.range = state.range.slice(); xaxis.autorange = false; }
+
+  const layout = {
+    xaxis,
+    hovermode: 'x unified',
+    hoverlabel: { bgcolor: '#fff', bordercolor: COLOR.grid, font: { size: 13, color: COLOR.ink } },
+    showlegend: true,
+    legend: { orientation: 'h', x: domainEnd, xanchor: 'right', y: 1.16, yanchor: 'top', font: { size: 13 } },
+    margin: { l: 78, r: state.showFx ? 130 : 84, t: 62, b: 26 },
+    paper_bgcolor: '#fcfcfb',
+    plot_bgcolor: '#fcfcfb',
+    font: { family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
+    annotations: buildAnnotations()
+  };
+
+  if (priceView) {
+    layout.yaxis = {
+      title: { text: 'S&P 500 index level, ' + cur.label, font: { color: COLOR.spx, size: 13 } },
+      tickprefix: cur.prefix, tickformat: ',.0f',
+      tickfont: { color: COLOR.spx, size: 12 },
+      gridcolor: COLOR.grid, zeroline: false
+    };
+    layout.yaxis2 = {
+      title: { text: 'Gold, ' + cur.label + ' per troy oz', font: { color: COLOR.gold, size: 13 } },
+      tickprefix: cur.prefix, tickformat: ',.0f',
+      tickfont: { color: COLOR.gold, size: 12 },
+      overlaying: 'y', side: 'right', showgrid: false, zeroline: false
+    };
+  } else {
+    layout.yaxis = {
+      title: { text: 'Growth of 100 at the first visible month', font: { color: '#4a4a4a', size: 13 } },
+      tickformat: ',.0f',
+      tickfont: { color: '#4a4a4a', size: 12 },
+      gridcolor: COLOR.grid, zeroline: false
+    };
+  }
+
+  if (state.showFx) {
+    layout.yaxis3 = {
+      title: { text: 'USD/CAD', font: { color: COLOR.fx, size: 13 } },
+      tickformat: '.2f',
+      tickfont: { color: COLOR.fx, size: 12 },
+      overlaying: 'y', side: 'right', anchor: 'free', position: 1,
+      showgrid: false, zeroline: false
+    };
+  }
+  return layout;
+}
+
+const CONFIG = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] };
+
+// ---------------------------------------------------------------- metrics panel
+
+// Each row: [label, formatter, whether to tint by sign]
+const METRIC_ROWS = [
+  ['Start price',            s => fmtMoney(s.start),       false],
+  ['End price',              s => fmtMoney(s.end),         false],
+  ['Total return',           s => fmtPct(s.totalReturn),   true ],
+  ['Annualized return (CAGR)', s => fmtPct(s.cagr),        true ],
+  ['Annualized volatility',  s => fmtPlain(s.vol * 100, 1) + '%', false],
+  ['Max drawdown',           s => fmtPct(s.maxDD),         true ],
+  ['Best month',             s => fmtPct(s.best),          true ],
+  ['Worst month',            s => fmtPct(s.worst),         true ]
+];
+
+function cell(text, tint) {
+  if (!tint || text === '—') return '<td>' + text + '</td>';
+  const cls = text.startsWith('\u2212') ? 'neg' : 'pos';
+  return '<td class="' + cls + '">' + text + '</td>';
+}
+
+function updateMetrics() {
+  const rows = visibleRows();
+  const cur  = CUR();
+  const spx  = computeStats(valuesOf(rows, 'spx'));
+  const gold = computeStats(valuesOf(rows, 'gold'));
+
+  const body = METRIC_ROWS.map(([label, fmt, tint]) =>
+    '<tr><th scope="row">' + label + '</th>' + cell(fmt(spx), tint) + cell(fmt(gold), tint) + '</tr>'
+  );
+  body.push(
+    '<tr><th scope="row">Growth of ' + cur.prefix + '10,000</th>' +
+    '<td>' + fmtMoney(spx.growth10k) + '</td><td>' + fmtMoney(gold.growth10k) + '</td></tr>'
+  );
+  document.getElementById('metrics').innerHTML = body.join('');
+
+  document.getElementById('hSpx').textContent  = 'S&P 500 (' + cur.label + ')';
+  document.getElementById('hGold').textContent = 'Gold (' + cur.label + '/oz)';
+
+  const first = rows[0], last = rows[rows.length - 1];
+  const months = rows.length - 1;
+  document.getElementById('rangeLabel').textContent =
+    monthLabel(first.date) + ' – ' + monthLabel(last.date) +
+    ' · ' + months + ' months (' + (months / 12).toFixed(1) + ' yrs)';
+
+  const corr = correlation(spx.returns, gold.returns);
+  const fxMove = last.usdcad / first.usdcad - 1;
+  document.getElementById('corr').innerHTML =
+    'Correlation of the two series\u2019 monthly returns over this range: <b>' + fmtPlain(corr, 2) + '</b>. ' +
+    'USD/CAD moved ' + fmtPlain(first.usdcad, 4) + ' \u2192 ' + fmtPlain(last.usdcad, 4) +
+    ' (' + fmtPct(fxMove) + '), which added roughly that much to the CAD return of each.';
+
+  document.getElementById('subtitle').textContent =
+    'Monthly observations, ' + monthLabel(DATA[0].date) + ' – ' + monthLabel(DATA[DATA.length - 1].date) +
+    '. Both series priced in ' + cur.label + '. Price return only.';
+
+  document.getElementById('axisNote').textContent = state.view === 'price'
+    ? 'Each series has its own axis, so the gap between the lines means nothing — read the shape of each line here, and switch to “Indexed to 100” to compare returns directly.'
+    : 'Both series rebased to 100 at ' + monthLabel(first.date) + ', on one shared axis — vertical distance is now a like-for-like comparison.';
+}
+
+// ---------------------------------------------------------------- render + wiring
+
+const chartEl = document.getElementById('chart');
+let redrawing = false;      // guards the relayout -> react -> relayout loop
+
+function render() {
+  redrawing = true;
+  Plotly.react(chartEl, buildTraces(), buildLayout(), CONFIG)
+    .then(() => { redrawing = false; });
+  updateMetrics();
+}
+
+// Pull the current x-range out of whatever shape Plotly hands us.
+function readRange(ev) {
+  if (ev['xaxis.autorange'] === true) { state.range = null; return true; }
+  if (Array.isArray(ev['xaxis.range'])) {
+    state.range = ev['xaxis.range'].map(toMs); return true;
+  }
+  if (ev['xaxis.range[0]'] !== undefined) {
+    state.range = [toMs(ev['xaxis.range[0]']), toMs(ev['xaxis.range[1]'])]; return true;
+  }
+  return false;
+}
+
+Plotly.newPlot(chartEl, buildTraces(), buildLayout(), CONFIG).then(() => {
+  chartEl.on('plotly_relayout', ev => {
+    if (redrawing || !readRange(ev)) return;
+    updateMetrics();
+    // The indexed view is rebased to the first visible month, so its traces
+    // and annotations have to be rebuilt whenever the window moves.
+    if (state.view === 'indexed') render();
+    else Plotly.relayout(chartEl, { annotations: buildAnnotations() });
+  });
+});
+updateMetrics();
+
+document.querySelectorAll('input[name="cur"]').forEach(el =>
+  el.addEventListener('change', () => { state.currency = el.value; render(); }));
+
+document.querySelectorAll('input[name="view"]').forEach(el =>
+  el.addEventListener('change', () => { state.view = el.value; render(); }));
+
+document.getElementById('fx').addEventListener('change', e => {
+  state.showFx = e.target.checked;
+  render();
+});
+</script>
+</body>
+</html>
